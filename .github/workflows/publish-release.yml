@@ -1,0 +1,98 @@
+name: Publish release
+
+on:
+  workflow_dispatch:
+    inputs:
+      eas_build_id:
+        description: EAS build UUID
+        required: true
+        type: string
+      version:
+        description: Semver (napr. 1.4.3)
+        required: true
+        type: string
+      versionCode:
+        description: Android versionCode (integer)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: Download APK from EAS
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -e
+          if eas build:download --build-id "${{ inputs.eas_build_id }}" --non-interactive; then
+            mv *.apk app.apk 2>/dev/null || true
+          fi
+          if [ ! -f app.apk ]; then
+            eas build:view "${{ inputs.eas_build_id }}" --json > build.json
+            APK_URL=$(node -e "
+              const b=require('./build.json');
+              const u=b.artifacts?.applicationArchiveUrl||b.artifacts?.buildUrl||b.buildArtifactsUrl;
+              if(!u) process.exit(1);
+              console.log(u);
+            ")
+            curl -L -o app.apk "$APK_URL"
+          fi
+          test -f app.apk
+
+      - name: Compute hashes
+        id: hashes
+        run: |
+          MD5=$(md5sum app.apk | awk '{print $1}')
+          SHA256=$(sha256sum app.apk | awk '{print $1}')
+          SIZE=$(stat -c%s app.apk)
+          echo "md5=$MD5" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          echo "size=$SIZE" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare release asset
+        run: mv app.apk "dielna-${{ inputs.version }}.apk"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: Dielňa v${{ inputs.version }}
+          files: dielna-${{ inputs.version }}.apk
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update version.json
+        run: |
+          cat > version.json <<EOF
+          {
+            "version": "${{ inputs.version }}",
+            "versionCode": ${{ inputs.versionCode }},
+            "apkUrl": "https://github.com/pcwoodcraft/dielna-releases/releases/download/v${{ inputs.version }}/dielna-${{ inputs.version }}.apk",
+            "sha256": "${{ steps.hashes.outputs.sha256 }}",
+            "md5": "${{ steps.hashes.outputs.md5 }}",
+            "sizeBytes": ${{ steps.hashes.outputs.size }},
+            "releasedAt": "$(date -u +%Y-%m-%d)"
+          }
+          EOF
+
+      - name: Commit version.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add version.json
+          git diff --staged --quiet || git commit -m "Release v${{ inputs.version }} (versionCode ${{ inputs.versionCode }})"
+          git push
