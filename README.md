@@ -3,23 +3,23 @@
 Verejné repo pre `version.json` (GitHub Pages) a APK cez GitHub Releases.
 
 - **Pages:** https://pcwoodcraft.github.io/dielna-releases/version.json
+- **Releases:** https://github.com/pcwoodcraft/dielna-releases/releases
 - **APK:** len ako Release assets (nie v git histórii)
 
 ## Publish nového buildu
 
 1. V `sledovanie-hodin`: `eas build --profile preview --platform android`
-2. Skopíruj **build ID** z EAS dashboardu
-3. V tomto repo: **Actions → Publish release → Run workflow**
+2. Skopíruj **build ID** (UUID) z EAS dashboardu
+3. **Actions → Publish release → Run workflow**
    - `eas_build_id` — UUID z EAS
    - `version` — semver z `app.json` (napr. `1.4.3`)
    - `versionCode` — integer z `app.json` (napr. `8`)
-4. Secret `EXPO_TOKEN` musí byť nastavený v repo settings
+4. Secret `EXPO_TOKEN` v repo settings (Expo access token s prístupom k projektu `dielna`)
 
-Workflow stiahne APK z EAS, spočíta MD5 + SHA-256, vytvorí Release a aktualizuje `version.json`.
+Workflow stiahne APK cez Expo GraphQL API, spočíta MD5 + SHA-256, vytvorí Release a commitne `version.json`.
 
-## Prvé nasadenie
+**Pravidlo:** `versionCode` v `version.json` vždy rastie — nikdy downgrade.
 
-1. Vytvor verejné repo `pcwoodcraft/dielna-releases` na GitHube
-2. Pushni obsah tohto priečinka na `main`
-3. Settings → Pages → Source: **Deploy from branch `main`**, root
-4. Pridaj secret `EXPO_TOKEN`
+## Prvá verzia (1.4.3)
+
+Tablety na staršej appke (1.4.2) nemajú checker — prvýkrát treba APK nainštalovať manuálne z Releases. Ďalšie verzie už cez modal v appke.
