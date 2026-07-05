@@ -29,28 +29,60 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install EAS CLI
-        run: npm install -g eas-cli@latest
-
       - name: Download APK from EAS
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          BUILD_ID: ${{ inputs.eas_build_id }}
         run: |
-          set -e
-          if eas build:download --build-id "${{ inputs.eas_build_id }}" --non-interactive; then
-            mv *.apk app.apk 2>/dev/null || true
+          set -euo pipefail
+
+          if [ -z "${EXPO_TOKEN:-}" ]; then
+            echo "Chýba secret EXPO_TOKEN v repozitári."
+            exit 1
           fi
-          if [ ! -f app.apk ]; then
-            eas build:view "${{ inputs.eas_build_id }}" --json > build.json
-            APK_URL=$(node -e "
-              const b=require('./build.json');
-              const u=b.artifacts?.applicationArchiveUrl||b.artifacts?.buildUrl||b.buildArtifactsUrl;
-              if(!u) process.exit(1);
-              console.log(u);
-            ")
-            curl -L -o app.apk "$APK_URL"
-          fi
-          test -f app.apk
+
+          QUERY='query($id:ID!){ builds { byId(buildId:$id) { status artifacts { applicationArchiveUrl buildUrl buildArtifactsUrl } } } }'
+          PAYLOAD=$(node -e 'console.log(JSON.stringify({ query: process.argv[1], variables: { id: process.argv[2] } }))' "$QUERY" "$BUILD_ID")
+
+          echo "Fetching build metadata from Expo API..."
+          RESP=$(curl -sS -X POST https://api.expo.dev/graphql \
+            -H "Authorization: Bearer ${EXPO_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          echo "$RESP" > build-response.json
+
+          APK_URL=$(node -e "
+            const r = JSON.parse(require('fs').readFileSync('build-response.json', 'utf8'));
+            if (r.errors && r.errors.length) {
+              console.error('GraphQL errors:', JSON.stringify(r.errors, null, 2));
+              process.exit(1);
+            }
+            const build = r.data && r.data.builds && r.data.builds.byId;
+            if (!build) {
+              console.error('Build sa nenašiel — skontroluj eas_build_id.');
+              process.exit(1);
+            }
+            if (build.status !== 'FINISHED') {
+              console.error('Build ešte nie je hotový. Stav:', build.status);
+              process.exit(1);
+            }
+            const url = (build.artifacts && (
+              build.artifacts.applicationArchiveUrl ||
+              build.artifacts.buildUrl ||
+              build.artifacts.buildArtifactsUrl
+            )) || '';
+            if (!url) {
+              console.error('Build nemá URL na APK — skontroluj, či ide o Android APK build (preview).');
+              process.exit(1);
+            }
+            console.log(url);
+          ")
+
+          echo "Downloading APK..."
+          curl -fL -o app.apk "$APK_URL"
+          test -s app.apk
+          ls -la app.apk
 
       - name: Compute hashes
         id: hashes
