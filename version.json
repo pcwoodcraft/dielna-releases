@@ -1,9 +1,9 @@
 {
-  "version": "1.4.3",
-  "versionCode": 8,
-  "apkUrl": "https://github.com/pcwoodcraft/dielna-releases/releases/download/v1.4.3/dielna-1.4.3.apk",
-  "sha256": "eaa43ffc0d983d88ea226f9cab06b7f4793a8c7bfb51544b3622512a37f5d325",
-  "md5": "bbad16bf210e29e7a6c944ec388cef0c",
-  "sizeBytes": 62682877,
-  "releasedAt": "2026-07-05"
+  "version": "1.5.0",
+  "versionCode": 9,
+  "apkUrl": "https://github.com/pcwoodcraft/dielna-releases/releases/download/v1.5.0/dielna-1.5.0.apk",
+  "sha256": "a7387e6698ccefb40af385f9da593ed05a8a3e578092e5ba43c5dcc6e5936d3e",
+  "md5": "0c8e137c3d9ddc3ded81be1be4e69609",
+  "sizeBytes": 62684197,
+  "releasedAt": "2026-07-20"
 }
